@@ -40,15 +40,28 @@ Quarter = CONCAT('Q',QUARTER(`Date`));
 
 SELECT * FROM adidas;
 
-# 1. Calculate total sales, units sold, and profit for each `Retailer ID` and `Product`.
+-- 1. All over Performance by Time_Period & Sales_Method
 
-SELECT `Retailer ID`,ROUND(SUM(`Total Amount`)) AS Total_Sales,SUM(`Units Sold`) AS Units_Sold,ROUND(SUM(Profit)) AS Profit
+WITH CTE AS
+(
+SELECT SUBSTRING(`Date`,1,7) AS Period,
+CONCAT(MONTHNAME(`Date`),' - ',YEAR(`Date`)) AS 'Month-Year',
+Sales_Method,SUM(Total_Amount) AS Total_Amount,
+SUM(Units_Sold) AS Units_Sold,SUM(Profit) AS Profit,
+CONCAT(ROUND(AVG(Profit_in_Percentage),1),'%') AS Profit_in_Percentage,
+ROW_NUMBER() 
+	OVER(
+		PARTITION BY SUBSTRING(`Date`,1,7),
+        CONCAT(MONTHNAME(`Date`),' - ',YEAR(`Date`))
+		ORDER BY SUM(Total_Amount) DESC,SUM(Units_Sold) DESC,
+        SUM(Profit) DESC,CONCAT(ROUND(AVG(Profit_in_Percentage),1),'%') DESC
+		) AS RN	
 FROM adidas
-GROUP BY 1;
-
-SELECT `Product`,ROUND(SUM(`Total Amount`)) AS Total_Sales,SUM(`Units Sold`) AS Units_Sold,ROUND(SUM(Profit)) AS Profit
-FROM adidas
-GROUP BY 1;
+GROUP BY 1,2,3
+ORDER BY 1
+)
+SELECT `Month-Year`, Sales_Method, Total_Amount, Units_Sold, Profit, Profit_in_Percentage FROM CTE
+WHERE RN = 1;
 
 -- 2. Rank products by `Total Amount` and `Profit` within each `Region`.
 
@@ -77,20 +90,7 @@ SELECT Region,State,City,
 FROM adidas
 GROUP BY 1,2,3;
 
--- In this dataset every single state has just a single city -- 
-
--- 4. Calculate total sales for each month and quarter to analyze trends.
-
-SELECT month,ROUND(SUM(`Total Amount`)) AS Total_Amount
-FROM adidas
-GROUP BY 1
-ORDER BY MIN(month_index);
-
-
-SELECT Quarter,ROUND(SUM(`Total Amount`)) AS Total_Amount
-FROM adidas
-GROUP BY 1
-;
+-- All over the performance by Month-Year, Region and City
 
 WITH CTE AS
 (
@@ -102,11 +102,36 @@ ORDER BY 1,MIN(month_index)
 SELECT CONCAT(Quarter,' - ',month) AS Period,Total_Amount
 FROM CTE;
 
--- 5. Compare `Total Amount` and `Profit` for different `Sales Method` values (`In-store`, `Outlet`, `Online`).
-
-SELECT `Sales Method`,ROUND(SUM(`Total Amount`)) AS Total_Amount,ROUND(SUM(Profit)) AS Profit
-FROM adidas
-GROUP BY 1;
+WITH CTE AS 
+(
+SELECT SUBSTRING(`Date`,1,7) AS Period,
+CONCAT(MONTHNAME(`Date`),' - ',YEAR(`Date`)) AS `Month-Year`,
+Region,City,
+SUM(Total_Amount) AS Total_Amount,
+SUM(Profit) AS Total_Profit,
+SUM(Units_Sold) AS Total_Units_Sold,
+CONCAT(ROUND(AVG(Profit_in_Percentage),1),'%') AS Avg_Percentage,
+ROW_NUMBER() 
+	OVER(
+    PARTITION BY SUBSTRING(`Date`,1,7),Region
+    ORDER BY 
+		SUM(Total_Amount) DESC,
+        SUM(Profit) DESC,
+        SUM(Units_Sold) DESC,
+		CONCAT(ROUND(AVG(Profit_in_Percentage),1),'%') DESC
+		) AS RN
+FROM ad
+GROUP BY 1,2,3,4
+ORDER BY 1,3,4
+),
+CTEE AS
+(
+SELECT `Month-Year`, Region,City, Total_Amount, Total_Profit, Total_Units_Sold, Avg_Percentage
+FROM CTE
+WHERE RN <= 3
+ORDER BY Period,3,4 DESC,5 DESC,6 DESC,7 DESC
+)
+SELECT * FROM CTEE;
 
 
 -- 6. Calculate the total Total Amount and Profit for each Retailer ID and categorize them into tiers based on their Profit
